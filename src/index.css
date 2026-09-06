@@ -1,0 +1,82 @@
+html,
+body,
+#root {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+}
+
+#root > * {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* antd v6 message hardcodes placement: top + height: 100vh.
+   Force bottom-center like placement: bottom (column-reverse). */
+.ant-message.ant-message-top {
+  top: auto !important;
+  bottom: 0 !important;
+  inset-block-start: auto !important;
+  inset-block-end: 0 !important;
+  flex-direction: column-reverse !important;
+}
+
+/* Users table: smooth expand / collapse (override antd display:none). */
+.users-table .ant-table-expanded-row {
+  display: table-row !important;
+}
+
+.users-table .ant-table-expanded-row > .ant-table-cell {
+  padding-block: 0 !important;
+  overflow: hidden;
+  border-bottom: none !important;
+  transition: background-color 0.28s ease;
+}
+
+.users-expand-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.32s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.users-expand-panel.is-open {
+  grid-template-rows: 1fr;
+}
+
+.users-expand-panel__inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(-8px);
+  padding-block: 0;
+  transition:
+    opacity 0.26s ease,
+    transform 0.32s cubic-bezier(0.33, 1, 0.68, 1),
+    padding-block 0.32s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.users-expand-panel.is-open .users-expand-panel__inner {
+  opacity: 1;
+  transform: translateY(0);
+  padding-block: 16px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .users-expand-panel,
+  .users-expand-panel__inner {
+    transition: none;
+  }
+}

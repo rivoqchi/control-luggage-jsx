@@ -1,8 +1,18 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import type { Role, StaffDuty } from '../api/types'
-import { usersApi } from '../api/users'
+import { usersApi, type UpdateUserInput } from '../api/users'
 import { queryKeys } from './queryKeys'
+
+export function useUpdateUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: UpdateUserInput & { id: string }) => usersApi.update(id, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.users.all })
+    },
+  })
+}
 
 export function useUpdateUserRole() {
   const qc = useQueryClient()

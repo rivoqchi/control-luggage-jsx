@@ -1,12 +1,15 @@
-import { StopOutlined, UnlockOutlined } from '@ant-design/icons'
+import { EditOutlined, StopOutlined, UnlockOutlined } from '@ant-design/icons'
 import {
   App,
   Button,
   Descriptions,
+  Drawer,
+  Form,
   Input,
   Select,
   Skeleton,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -18,7 +21,7 @@ import { Navigate } from 'react-router-dom'
 import { getErrorMessage } from '../api/errors'
 import { roles, staffDuties, type Role, type StaffDuty, type User } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
-import { useBlockUser, useUpdateUserRole } from '../hooks/useUserMutations'
+import { useBlockUser, useUpdateUser, useUpdateUserRole } from '../hooks/useUserMutations'
 import { useUsers } from '../hooks/useUsers'
 import { dutyLabel, roleLabel } from '../utils/labels'
 import { displayName, formatDateTime } from '../utils/person'
@@ -66,12 +69,25 @@ function isSuperAdmin(user: User) {
   return user.phone === SUPER_ADMIN_PHONE
 }
 
+type EditFormValues = {
+  phone?: string
+  email?: string
+  first_name?: string
+  last_name?: string
+  username?: string
+  role: Role
+  duty?: StaffDuty
+  blocked: boolean
+}
+
 export default function UsersPage() {
   const { message } = App.useApp()
   const { user: me } = useAuth()
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [blockedFilter, setBlockedFilter] = useState<BlockedFilter>('all')
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState<User | null>(null)
+  const [form] = Form.useForm<EditFormValues>()
 
   const filter = useMemo(
     () => ({
@@ -85,7 +101,23 @@ export default function UsersPage() {
 
   const { data, isLoading, error } = useUsers(filter)
   const updateRole = useUpdateUserRole()
+  const updateUser = useUpdateUser()
   const blockUser = useBlockUser()
+  const watchRole = Form.useWatch('role', form)
+
+  useEffect(() => {
+    if (!editing) return
+    form.setFieldsValue({
+      phone: editing.phone,
+      email: editing.email,
+      first_name: editing.first_name,
+      last_name: editing.last_name,
+      username: editing.username,
+      role: editing.role,
+      duty: editing.duty,
+      blocked: editing.blocked,
+    })
+  }, [editing, form])
 
   if (me && me.role !== 'admin') {
     return <Navigate to="/dashboard" replace />
@@ -103,6 +135,14 @@ export default function UsersPage() {
         onError: (err) => message.error(getErrorMessage(err)),
       },
     )
+  }
+
+  const openEdit = (row: User) => {
+    if (isSuperAdmin(row)) {
+      message.warning('Super admin o‘zgartirilmaydi')
+      return
+    }
+    setEditing(row)
   }
 
   const columns: ColumnsType<User> = [
@@ -182,6 +222,24 @@ export default function UsersPage() {
       dataIndex: 'created_at',
       render: (value: string) => formatDateTime(value),
     },
+    {
+      title: '',
+      key: 'actions',
+      width: 110,
+      render: (_, row) => (
+        <Button
+          type="link"
+          icon={<EditOutlined />}
+          disabled={isSuperAdmin(row)}
+          onClick={(e) => {
+            e.stopPropagation()
+            openEdit(row)
+          }}
+        >
+          Tahrirlash
+        </Button>
+      ),
+    },
   ]
 
   return (
@@ -242,6 +300,8 @@ export default function UsersPage() {
               <SmoothExpandPanel expanded={expanded}>
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                   <Descriptions size="small" bordered column={1}>
+                    <Descriptions.Item label="Ism">{row.first_name || '—'}</Descriptions.Item>
+                    <Descriptions.Item label="Familiya">{row.last_name || '—'}</Descriptions.Item>
                     <Descriptions.Item label="Vazifa">
                       {row.duty ? dutyLabel[row.duty] : '—'}
                     </Descriptions.Item>
@@ -258,7 +318,15 @@ export default function UsersPage() {
                     <Descriptions.Item label="ID">{row.id}</Descriptions.Item>
                   </Descriptions>
 
-                  <Space>
+                  <Space wrap>
+                    <Button
+                      type="primary"
+                      icon={<EditOutlined />}
+                      disabled={isSuperAdmin(row)}
+                      onClick={() => openEdit(row)}
+                    >
+                      Ma’lumotni tahrirlash
+                    </Button>
                     {isSuperAdmin(row) ? (
                       <Typography.Text type="secondary">
                         Super admin o‘zgartirilmaydi
@@ -305,6 +373,87 @@ export default function UsersPage() {
           locale={{ emptyText: 'Foydalanuvchilar yo‘q' }}
         />
       )}
+
+      <Drawer
+        title={editing ? `Tahrirlash — ${displayName(editing)}` : 'Tahrirlash'}
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        width={420}
+        destroyOnClose
+        extra={
+          <Button
+            type="primary"
+            loading={updateUser.isPending}
+            onClick={() => form.submit()}
+          >
+            Saqlash
+          </Button>
+        }
+      >
+        <Form<EditFormValues>
+          form={form}
+          layout="vertical"
+          onFinish={(values) => {
+            if (!editing) return
+            if (values.role === 'staff' && !values.duty) {
+              message.warning('Xodim uchun vazifa tanlang')
+              return
+            }
+            updateUser.mutate(
+              {
+                id: editing.id,
+                phone: values.phone?.trim(),
+                email: values.email?.trim(),
+                first_name: values.first_name?.trim(),
+                last_name: values.last_name?.trim(),
+                username: values.username?.trim().replace(/^@+/, ''),
+                role: values.role,
+                duty: values.duty,
+                blocked: values.blocked,
+              },
+              {
+                onSuccess: () => {
+                  message.success('Saqlandi')
+                  setEditing(null)
+                },
+                onError: (err) => message.error(getErrorMessage(err)),
+              },
+            )
+          }}
+        >
+          <Form.Item name="phone" label="Telefon" rules={[{ required: true, message: 'Telefon kiriting' }]}>
+            <Input placeholder="+998..." />
+          </Form.Item>
+          <Form.Item name="first_name" label="Ism">
+            <Input />
+          </Form.Item>
+          <Form.Item name="last_name" label="Familiya">
+            <Input />
+          </Form.Item>
+          <Form.Item name="username" label="Telegram username">
+            <Input prefix="@" placeholder="username" />
+          </Form.Item>
+          <Form.Item name="email" label="Email">
+            <Input />
+          </Form.Item>
+          <Form.Item name="role" label="Rol" rules={[{ required: true }]}>
+            <Select
+              options={roles.map((role) => ({ value: role, label: roleLabel[role] }))}
+              disabled={editing?.id === me?.id}
+            />
+          </Form.Item>
+          {watchRole === 'staff' ? (
+            <Form.Item name="duty" label="Vazifa" rules={[{ required: true, message: 'Vazifa tanlang' }]}>
+              <Select
+                options={staffDuties.map((duty) => ({ value: duty, label: dutyLabel[duty] }))}
+              />
+            </Form.Item>
+          ) : null}
+          <Form.Item name="blocked" label="Bloklangan" valuePropName="checked">
+            <Switch disabled={editing?.id === me?.id} />
+          </Form.Item>
+        </Form>
+      </Drawer>
     </Space>
   )
 }

@@ -7,6 +7,17 @@ export type UsersFilter = {
   q?: string
 }
 
+export type UpdateUserInput = {
+  phone?: string
+  email?: string
+  first_name?: string
+  last_name?: string
+  username?: string
+  role: Role
+  duty?: StaffDuty
+  blocked: boolean
+}
+
 export const usersApi = {
   list(filter: UsersFilter = {}) {
     return client
@@ -16,6 +27,14 @@ export const usersApi = {
           blocked: filter.blocked,
           q: filter.q || undefined,
         },
+      })
+      .then((res) => res.data)
+  },
+  update(id: string, body: UpdateUserInput) {
+    return client
+      .patch<User>(`/users/${id}`, {
+        ...body,
+        duty: body.role === 'staff' ? body.duty : undefined,
       })
       .then((res) => res.data)
   },
